@@ -4,9 +4,11 @@ extern crate mockall;
 
 mod data;
 mod domain;
+mod ui;
 use crate::data::repositories::repositories::DBKeepRepository;
 use crate::domain::entities::Keep;
 use crate::domain::usecases::usecases::*;
+use crate::ui::models::KeepItems;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use std::error::Error;
@@ -18,9 +20,11 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use tui::backend::TermionBackend;
 use tui::layout::{Constraint, Direction, Layout};
+use tui::style::{Color, Modifier, Style};
 use tui::text::Spans;
 use tui::widgets::{Block, Borders, List, ListItem};
 use tui::Terminal;
+use webbrowser;
 
 fn handle_create(url: String, keep_repository: DBKeepRepository) {
     create_keep(Keep { url: url }, keep_repository);
@@ -38,21 +42,18 @@ type TypeTerminal = Terminal<Backend>;
 fn handle_get(keep_repository: DBKeepRepository, mut terminal: TypeTerminal) {
     println!("{}", clear::All);
     let result = get_all_keeps(keep_repository);
+    let mut keep_items = KeepItems::new(result.clone());
 
-    'display_loop: loop {
+    for c in stdin().keys() {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
-                .constraints(
-                    [
-                        Constraint::Percentage(80),
-                    ]
-                    .as_ref(),
-                )
+                .constraints([Constraint::Percentage(80)].as_ref())
                 .split(f.size());
             let size = f.size();
-            let items: Vec<ListItem> = result
+            let items: Vec<ListItem> = keep_items
+                .items
                 .iter()
                 .map(|keep| {
                     let span = Spans::from(keep.url.clone());
@@ -60,19 +61,32 @@ fn handle_get(keep_repository: DBKeepRepository, mut terminal: TypeTerminal) {
                 })
                 .collect();
 
-            let list_items =
-                List::new(items).block(Block::default().borders(Borders::ALL).title("Keepy TUI"));
-            f.render_widget(list_items, chunks[0]);
+            let list_items = List::new(items)
+                .block(Block::default().borders(Borders::ALL).title("Keepy TUI"))
+                .highlight_style(
+                    Style::default()
+                        .bg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .highlight_symbol("✨");
+            f.render_stateful_widget(list_items, chunks[0], &mut keep_items.state);
         });
 
-        for c in stdin().keys() {
-            match c.unwrap() {
-                Key::Char('q') => {
-                    break 'display_loop;
-                }
-                _ => (),
+        //for c in stdin().keys() {
+        match c.unwrap() {
+            Key::Char('q') => {
+                break;
             }
+            Key::Down => keep_items.next(),
+            Key::Up => keep_items.previous(),
+            Key::Left => keep_items.unselect(),
+            Key::Right => { 
+                let url_to_open = result[keep_items.state.selected().unwrap()].url.as_str();
+                webbrowser::open(url_to_open).is_ok(); 
+            }
+            _ => {}
         }
+        //}
     }
 }
 

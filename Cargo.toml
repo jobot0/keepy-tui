@@ -7,10 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tui = "0.10"
-termion = "1.5"
 diesel = { version = "1.4.4", features = ["sqlite"] }
 dotenv = "0.15.0"
+termion = "1.5"
+tui = "0.10"
+webbrowser = "0.5.5"
 
 [dev-dependencies]
 mockall="0.8.1"
